@@ -132,11 +132,24 @@ def engf(num:float, uni:str = '', prec:int = 2) -> str:
     return engineering_form(num, unit=uni, round_to_decimal_places=prec)
 
 def _test():
-    import random
-    value = 15050.504
-    print(f'Value:     {value}')
-    print(f'SI Form:   {si_form(value, 'V')}')
-    print(f'Eng. Form: {engineering_form(value, 'V', 3)}')
+    from decimal import Decimal
+
+    test_cases = [
+        (15050.504, 'V'),  # standard case
+        (0.000000001, 'A'),  # very small number
+        (1000000000000000, 'Ω'),  # large number
+        (0.00000000000000000000000000001, 'V'),  # even smaller number
+        (-0.00000000001, 'A'),  # negative number
+        (1000000000000000000, 'Ω'),  # very large number
+    ]
+
+    for test_case in test_cases:
+        value, unit = test_case
+        print(f'Value:     {value}')  # print with 20 decimal places
+        print(f'SI Form:   {si_form(value, unit)}')
+        print(f'Eng. Form: {engineering_form(value, unit)}')
+        print()
+
 
 if __name__ == '__main__':
     try:
