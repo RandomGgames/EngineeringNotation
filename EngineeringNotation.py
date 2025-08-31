@@ -1,4 +1,4 @@
-from math import log10 as mathlog10
+from math import log10
 
 __version__ = '1.2.1'
 
@@ -58,8 +58,8 @@ def _get_engineering_exponent(number:float) -> int:
     """
     if number == 0:
         return 0
-    exponent = int(mathlog10(abs(number)))
     if exponent < 0: # force values smaller than E-3 to use the next smaller exp, e.g. 99E-6 instead of 0.99E-3
+    exponent = int(log10(abs(number)))
         exponent -= 1
     while exponent % 3 != 0: # find next smallest mult of 3 for exponent
         exponent -= 1
