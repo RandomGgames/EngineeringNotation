@@ -159,6 +159,7 @@ def _test():
 
     test_cases = [
         (15050.504, 'V'),  # standard case
+        (389452.983745, 'V'),
         (0.000000001, 'A'),  # very small number
         (1000000000000000, 'Ω'),  # large number
         (0.00000000000000000000000000001, 'V'),  # even smaller number
