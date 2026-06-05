@@ -1,7 +1,7 @@
 import typing
-from math import log10
+import math
 
-__version__ = '1.2.2'
+__version__ = '1.2.3'
 
 _si_prefixes = {
     -60: 'yy',  # *10^-60
@@ -49,8 +49,7 @@ _si_prefixes = {
 
 
 def _get_engineering_exponent(number: float) -> int:
-    """
-    Calculate the engineering exponent of a given number.
+    """Calculate the engineering exponent of a given number.
 
     Parameters:
         number (float): The number to calculate the engineering exponent for.
@@ -60,119 +59,147 @@ def _get_engineering_exponent(number: float) -> int:
     """
     if number == 0:
         return 0
-    exponent = int(log10(abs(number)))
-    if exponent < 0:  # force values smaller than E-3 to use the next smaller exp, e.g. 99E-6 instead of 0.99E-3
-        exponent -= 1
-    while exponent % 3 != 0:  # find next smallest mult of 3 for exponent
-        exponent -= 1
-    return exponent
+    return int(math.floor(math.log10(abs(number)) / 3) * 3)
 
 
 def _get_exp_str(exponent: int) -> str:
     """
-    Handle printing positive, negative, and zero exponents
-
-    Parameters:
-        exponent (int): the exponent to be formatted for engineering notation
-
-    Returns:
-        str: formatted exponent, e.g. E+3 or E-2 or ''
+    Handle printing positive, negative, and zero exponents.
     """
-    signstr = ''
     if exponent > 0:
-        signstr = f'E{exponent}'  # Posative exponent
-    elif exponent < 0:
-        signstr = f'E{exponent}'  # Negative exponent (- already in number)
-    else:
-        signstr = ''
-    return signstr
+        return f"E+{exponent}"
+    if exponent < 0:
+        return f"E{exponent}"
+    return ""
 
 
-def si_form(number: typing.Union[int, float], unit: str = '', round_to_decimal_places: int = 3) -> str:
-    """
-    Format a number using SI prefixes.
-
-    Parameters:
-        number (float): The number to format. For example, 1000, 0.01, 1000000, etc.
-        unit (str): The unit to append to the formatted number. For example, 'V', 'A', 'Ω', etc. Default is an empty string.
-        round_to_decimal_places (int): The number of decimal places to round the formatted number to. Default is 3.
-
-    Returns:
-        str: The formatted number with SI prefixes and the provided unit. For example, '1.000 kV', '1.000 mA', '1.000 kΩ', etc.
-    """
+def si_form(
+    number: typing.Union[int, float], unit: str = "", round_to_decimal_places: int = 3
+) -> str:
     if not isinstance(number, (int, float)):
-        raise TypeError('engineering_form() input number only accepts numbers (int or float)')
+        raise TypeError("si_form() input number only accepts numbers (int or float)")
     if not isinstance(unit, str):
-        raise TypeError('engineering_form() input unit only accepts strings')
+        raise TypeError("si_form() input unit only accepts strings")
     if not isinstance(round_to_decimal_places, int):
-        raise TypeError('engineering_form() input round_to_decimal_places only accepts integers')
+        raise TypeError("si_form() input round_to_decimal_places only accepts integers")
+
+    if number == 0:
+        mantissa_str = format(0.0, f".{round_to_decimal_places}f")
+        return f"{mantissa_str} {unit}".strip()
+
     exponent = _get_engineering_exponent(number)
+    mantissa_val = round(number / 10**exponent, round_to_decimal_places)
+
+    # Core Bugfix 1: Check if formatting rounds the mantissa up to or past 1000 string representation
+    if abs(round(mantissa_val, round_to_decimal_places)) >= 1000:
+        exponent += 3
+        mantissa_val = round(number / 10**exponent, round_to_decimal_places)
+
+    # Core Bugfix 2: Fallback if exponent is missing OR if we are spilling outside dictionary limits
     prefix = _si_prefixes.get(exponent)
-    mantissa = str(format(round(number / 10 ** exponent, round_to_decimal_places), f'.{round_to_decimal_places}f'))  # part after decimal place
-    outstr = f'{mantissa} {prefix}{unit}' if prefix is not None else f'{mantissa} {unit}'
-    return outstr.rstrip()
+    if prefix is None and exponent != 0:
+        return engineering_form(number, unit, round_to_decimal_places)
+
+    # Catch boundary overflows (e.g., 10 * 10^60 is functionally 10^61, which is past 'QQ')
+    if exponent == max(_si_prefixes.keys()) and abs(mantissa_val) >= 10:
+        return engineering_form(number, unit, round_to_decimal_places)
+    if exponent == min(_si_prefixes.keys()) and abs(mantissa_val) < 1:
+        return engineering_form(number, unit, round_to_decimal_places)
+
+    mantissa_str = format(mantissa_val, f".{round_to_decimal_places}f")
+    outstr = f"{mantissa_str} {prefix}{unit}" if prefix is not None else f"{mantissa_str} {unit}"
+    return outstr.strip()
 
 
-def engineering_form(number: typing.Union[int, float], unit: str = '', round_to_decimal_places: int = 3) -> str:
-    """
-    Format a number using engineering notation.
-
-    Parameters:
-        number (Number): The number to format. For example, 1000, 0.01, 1000000, etc.
-        unit (str): The unit to append to the formatted number. For example, 'V', 'A', 'Ω', etc. Default is an empty string.
-        round_to_decimal_places (int): The number of decimal places to round the formatted number to. Default is 3.
-
-    Returns:
-        str: The formatted number in engineering notation with the provided unit. For example, '1.00E+3 V', '1.00E-2 A', '1.00E+3 Ω', etc.
-    """
+def engineering_form(
+    number: typing.Union[int, float], unit: str = "", round_to_decimal_places: int = 3
+) -> str:
     if not isinstance(number, (int, float)):
-        raise TypeError('engineering_form() input number only accepts numbers (int or float)')
+        raise TypeError("engineering_form() input number only accepts numbers (int or float)")
     if not isinstance(unit, str):
-        raise TypeError('engineering_form() input unit only accepts strings')
+        raise TypeError("engineering_form() input unit only accepts strings")
     if not isinstance(round_to_decimal_places, int):
-        raise TypeError('engineering_form() input round_to_decimal_places only accepts integers')
+        raise TypeError("engineering_form() input round_to_decimal_places only accepts integers")
+
+    if number == 0:
+        mantissa_str = format(0.0, f".{round_to_decimal_places}f")
+        return f"{mantissa_str} {unit}".strip() if unit != "" else mantissa_str
+
     exponent = _get_engineering_exponent(number)
-    mantissa = str(format(round(number / 10 ** exponent, round_to_decimal_places), f'.{round_to_decimal_places}f'))  # part after decimal place
-    return f'{mantissa}{_get_exp_str(exponent)} {unit}' if unit != '' else f'{mantissa}{_get_exp_str(exponent)}'
+    mantissa_val = round(number / 10**exponent, round_to_decimal_places)
+
+    if abs(round(mantissa_val, round_to_decimal_places)) >= 1000:
+        exponent += 3
+        mantissa_val = round(number / 10**exponent, round_to_decimal_places)
+
+    mantissa_str = format(mantissa_val, f".{round_to_decimal_places}f")
+    exp_str = _get_exp_str(exponent)
+    return f"{mantissa_str}{exp_str} {unit}".strip() if unit != "" else f"{mantissa_str}{exp_str}"
 
 
 def sif(num: float, uni: str = '', prec: int = 3) -> str:
-    """
-    alias of si_form()
-    """
     if not isinstance(num, (int, float)):
         raise TypeError('sif() only accepts numbers')
     return si_form(num, unit=uni, round_to_decimal_places=prec)
 
 
 def engf(num: float, uni: str = '', prec: int = 3) -> str:
-    """
-    alias of engineering_form()
-    """
     if not isinstance(num, (int, float)):
         raise TypeError('engf() only accepts numbers')
     return engineering_form(num, unit=uni, round_to_decimal_places=prec)
 
 
 def _test():
-    from decimal import Decimal
-
     test_cases = [
-        (15050.504, 'V'),  # standard case
-        (389452.983745, 'V'),
-        (0.000000001, 'A'),  # very small number
-        (1000000000000000, 'Ω'),  # large number
-        (0.00000000000000000000000000001, 'V'),  # even smaller number
-        (-0.00000000001, 'A'),  # negative number
-        (1000000000000000000, 'Ω'),  # very large number
+        (15050.504, 'V', 3),
+        (389452.983745, 'V', 2),
+        (0.0, 'A', 3),
+        (-0.00000000001, 'A', 3),
+        (-5432.1, 'Hz', 1),
+        (1.23456, 'm', 1),
+        (1.23456, 'm', 0),
+        (1000, 'V', 0),
+        (1000, 'V', 1),
+        (1000, 'V', 2),
+        (999.9, 'V', 0),
+        (999.9, 'V', 1),
+        (999.9, 'V', 2),
+        (999.9, 'V', 3),
+        (999.99, 'V', 0),
+        (999.99, 'V', 1),
+        (999.99, 'V', 2),
+        (999.99, 'V', 3),
+        (-999.9, 'V', 0),
+        (-999.9, 'V', 1),
+        (-999.9, 'V', 2),
+        (-999.9, 'V', 3),
+        (-999.99, 'V', 0),
+        (-999.99, 'V', 1),
+        (-999.99, 'V', 2),
+        (-999.99, 'V', 3),
+        (0.9999, 'A', 1),
+        (0.99999, 'A', 3),
+        (0.0009999, 'A', 3),
+        (1e60, 'g', 3),
+        (1e61, 'g', 3),
+        (1e-60, 's', 3),
+        (1e-61, 's', 3),
+        (0.0055, 'F', 4),
+        (-123456789, 'W', 2),
+        (5.5e18, 'm/s', 1),
     ]
 
-    for test_case in test_cases:
-        value, unit = test_case
-        print(f'Value:     {value}')  # print with 20 decimal places
-        print(f'SI Form:   {si_form(value, unit)}')
-        print(f'Eng. Form: {engineering_form(value, unit)}')
-        print()
+    print(f"{'Input Value':<15} | {'Unit':<5} | {'Decimals':<4} | {'SI Output':<20} | {'Engineering Output':<20}")
+    print("-" * 75)
+
+    for value, unit, prec in test_cases:
+        res_si = si_form(value, unit, round_to_decimal_places=prec)
+        res_eng = engineering_form(value, unit, round_to_decimal_places=prec)
+
+        print(f"{value:<15g} | {unit:<5} | {prec:<4}     | {res_si:<20} | {res_eng:<20}")
+
+    print("-" * 75)
+    print("Test execution complete.")
 
 
 if __name__ == '__main__':
